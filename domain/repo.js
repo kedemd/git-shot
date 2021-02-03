@@ -83,7 +83,7 @@ module.exports = class Repo {
     }
 
     async fetchCommitsFromGithub(c) {
-        //  "ab23cff85c438c4da1d0a0fc5f3609ab9f310a3f"
+        //  "7091989448a76f5bea2116e384910fba41a576a3"
         console.log(`Fetching commits from Github for ${this.owner}/${this.name}`);
         const octokit = new Octokit({
             auth: this.auth,
@@ -117,6 +117,7 @@ module.exports = class Repo {
             });
         }
 
+        this.fetchCommitsStatusUpdateTimestamp = Date.now();
         await this.save(c);
     }
 }
