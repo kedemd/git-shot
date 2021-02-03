@@ -83,7 +83,7 @@ module.exports = class Repo {
                 await newCommit.save(c);
             }
 
-            commits = await octokit.repos.listCommits({ owner: 'kedemd', repo:this.name, since: since, page: ++page, per_page: 100});
+            commits = await octokit.repos.listCommits({ owner: this.owner, repo:this.name, since: since, page: ++page, per_page: 100});
         }
 
         await this.save(c);
