@@ -49,7 +49,7 @@ module.exports = class Commit {
     }
 
     static async list(c, repositoryId) {
-        let results = await Util.promisify(c.query).call(c, `SELECT * FROM commits WHERE repoId = ?`, [repositoryId]);
+        let results = await Util.promisify(c.query).call(c, `SELECT * FROM commits WHERE repoId = ? ORDER BY timestamp ASC`, [repositoryId]);
         return results.map(r => new Commit(r));
     }
 
