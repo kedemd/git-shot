@@ -4,13 +4,6 @@ const Path = require('path');
 const Pageres = require('pageres');
 
 module.exports = class Commit {
-    constructor(data) {
-        let keys = Object.keys(this);
-        for(let key of keys){
-            this[key] = data[key] || this[key];
-        }
-    }
-
     sha = null;
     repoId = null;
     timestamp;
@@ -20,7 +13,14 @@ module.exports = class Commit {
     htmlUrl;
     screenshotPath = null;
 
-    static async parseFromGit(c, repo, gitCommit){
+    constructor(data) {
+        let keys = Object.keys(this);
+        for (let key of keys) {
+            this[key] = data[key] || this[key];
+        }
+    }
+
+    static async parseFromGit(c, repo, gitCommit) {
         let commit = new Commit({
             sha: gitCommit.sha,
             repoId: repo.id,
@@ -39,9 +39,9 @@ module.exports = class Commit {
         return new Commit(results[0]);
     }
 
-    static async getLatestByRepositoryId(c, repoId){
+    static async getLatestByRepositoryId(c, repoId) {
         let result = (await Util.promisify(c.query).call(c, 'SELECT * FROM commits WHERE repoId = ? ORDER BY timestamp DESC LIMIT 1', [repoId]))[0];
-        if (!result){
+        if (!result) {
             return null;
         }
 
@@ -53,45 +53,18 @@ module.exports = class Commit {
         return results.map(r => new Commit(r));
     }
 
-    static async takeScreenshots(c){
+    static async takeScreenshots(c) {
         let results = await c.awaitQuery('SELECT * FROM commits WHERE screenshotPath IS NULL LIMIT 10');
         let commits = results.map(r => new Commit(r));
 
-        for(let commit of commits){
+        for (let commit of commits) {
             await commit.takeScreenshot(c);
         }
 
         return commits;
     }
 
-    async takeScreenshot(c){
-        let path = Path.join(__dirname, '..', 'screenshots', this.sha + '.png');
-        if (await Util.promisify(fs.exists).call(fs, path)){
-            this.screenshotPath = Path.join(__dirname, '..', 'screenshots', this.sha + '.png');
-            await this.save(c);
-            return;
-        }
-
-        try {
-            await new Pageres().src(this.htmlUrl, ['1280x1024'], {filename: this.sha}).dest(Path.join(__dirname, '..', 'screenshots')).run();
-            this.screenshotPath = Path.join(__dirname, '..', 'screenshots', this.sha + '.png');
-            await this.save(c);
-        } catch(e){
-            console.log(e);
-        }
-    }
-
-    async save(c) {
-        let keys = Object.keys(this);
-
-        let result = await c.awaitQuery(
-            `INSERT INTO commits (${keys.join(',')}) VALUES(${keys.map(k => '?').join(',')})
-            ON DUPLICATE KEY UPDATE ${keys.map(k => k + ' = VALUES(' + k + ')').join(',')}`,
-            keys.map(k => this[k]));
-        this.sha = result.insertId;
-    }
-
-    static async createTable(c){
+    static async createTable(c) {
         return await Util.promisify(c.query).call(c, `CREATE TABLE IF NOT EXISTS commits (
             sha varchar(250) NOT NULL,
             repoId int(11) NOT NULL,
@@ -104,5 +77,32 @@ module.exports = class Commit {
             PRIMARY KEY (sha),
             CONSTRAINT FK_RepoCommit FOREIGN KEY (repoId) REFERENCES repos(id) ON DELETE CASCADE
         )`);
+    }
+
+    async takeScreenshot(c) {
+        let path = Path.join(__dirname, '..', 'screenshots', this.sha + '.png');
+        if (await Util.promisify(fs.exists).call(fs, path)) {
+            this.screenshotPath = Path.join(__dirname, '..', 'screenshots', this.sha + '.png');
+            await this.save(c);
+            return;
+        }
+
+        try {
+            await new Pageres().src(this.htmlUrl, ['1280x1024'], {filename: this.sha}).dest(Path.join(__dirname, '..', 'screenshots')).run();
+            this.screenshotPath = Path.join(__dirname, '..', 'screenshots', this.sha + '.png');
+            await this.save(c);
+        } catch (e) {
+            console.log(e);
+        }
+    }
+
+    async save(c) {
+        let keys = Object.keys(this);
+
+        let result = await c.awaitQuery(
+            `INSERT INTO commits (${keys.join(',')}) VALUES(${keys.map(k => '?').join(',')})
+            ON DUPLICATE KEY UPDATE ${keys.map(k => k + ' = VALUES(' + k + ')').join(',')}`,
+            keys.map(k => this[k]));
+        this.sha = result.insertId;
     }
 }
