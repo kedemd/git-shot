@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="includes/ok-proxy.js"></script>
+    <script src="includes/ok.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="css/reset.css"/>
+    <style>
+        @keyframes fade_in {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        @keyframes fade_in_2 {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        img {
+
+        }
+        .loading_image {
+            height: 800px;
+            width: 800px;
+            background-image: url("https://cdn.dribbble.com/users/364116/screenshots/1899338/yogocat_animation.gif");
+            background-repeat: no-repeat;
+            background-position: center;
+            animation: fade_in 1s;
+
+        }
+        .loaded_image {
+            animation: fade_in_2 1s;
+        }
+        .fade {
+            animation: fade_in 1s;
+        }
+
+        .app {
+            display: flex;
+        }
+
+        .sidebar {
+            width: 250px;
+            height: 100%;
+            min-height: 100%;
+            flex-shrink: 0;
+            padding: 4px;
+            margin: 4px;
+        }
+        .main {
+            padding: 20px;
+        }
+        repos li {
+            margin: 4px;
+            padding: 4px;
+            border: 1px solid black;
+            border-radius: 4px;
+            list-style: none;
+        }
+        repos li:hover {
+            background: lightgray;
+        }
+        .selected {
+            background: darkgrey;
+        }
+
+        commits {
+            margin: 4px;
+            padding: 4px;
+        }
+        commits .title:hover {
+            background: lightgray;
+        }
+        commits .title.active {
+            background: darkgrey;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">Loading...</div>
+
+<script>
+    const store = OKProxy.create({
+        repos: [],
+        selectedRepo: null,
+        isLoadingRepos: false,
+        fetchRepos: async () => {
+            store.isLoadingRepos = true;
+            let repos = await (await fetch('/repos')).json();
+            store.repos = repos;
+            store.isLoadingRepos = false;
+        },
+        saveRepo: async (repo) => {
+            let response = await fetch('/repos', {
+                method: 'POST', headers: {
+                    'Content-Type': 'application/json',
+                }, body: JSON.stringify(repo)
+            });
+            if (!response.ok){
+                throw Error(response.statusText);
+            }
+
+            let result = await response.json();
+            if (repo.id) {
+
+            } else {
+                store.repos.push(result);
+            }
+        },
+        deleteRepo: async (repo) => {
+            let result = await (await fetch(`/repos/${repo.id}`, {method: 'DELETE'})).json();
+            store.repos.splice(store.repos.indexOf(repo), 1);
+            if (this.selectedRepo === repo){
+                this.selectedRepo = null;
+            }
+        },
+        selectRepo(repo){
+            if (this.selectedRepo) { this.selectedRepo.isSelected = false };
+            repo.isSelected = true;
+            this.selectedRepo = repo;
+        }
+    });
+    store.fetchRepos();
+
+    OK.register({
+        tag: 'app',
+        context: props => {
+            return {}
+        },
+        template:
+            `<div class="app">
+    <div class="sidebar"><repos></repos></div>
+    <div class="main">
+        <repo repo="{store.selectedRepo}" />
+    </div>
+</div>`
+    });
+
+    OK.register({
+        tag: 'repos',
+        context: props => {
+            return {
+                selectedRepo: store.selectedRepo,
+                onCreate() {
+                    store.selectedRepo = {
+                        id: null,
+                        name: '',
+                        owner: '',
+                        auth: ''
+                    }
+                }
+            }
+        },
+        template:
+            `Repositories:
+<span if="store.isLoadingRepos">Loading</span>
+<ul if="!store.isLoadingRepos" for="repo" of="store.repos">
+    <li on.click="store.selectRepo(repo)" class="{repo.isSelected ? 'selected' : ''}">{{repo.name}}</li>
+</ul>
+<button on.click="onCreate">Add</button>`
+    });
+
+    OK.register({
+        tag: 'repo',
+        context: props => {
+            return {
+                repo: props.repo,
+                async save(){
+                    try {
+                        await store.saveRepo(this.repo);
+                    } catch(e){
+                        this.saveError = e;
+                    }
+                },
+                saveError: null
+            }
+        },
+        template:
+`<div if="repo" style="display: flex; { saveError && 'border: 1px solid red;' || ''}">
+    <div>Owner: <input if.disable="{$el.disabled = !!repo.id}" value="{repo.owner}" on.change="e => { repo.owner = e.target.value }" type="text" /></div>
+    <div>Name: <input if.disable="{$el.disabled = !!repo.id}" value="{repo.name}"  on.change="e => { repo.name = e.target.value }"  type="text" /></div>
+    <div>Auth: <input value="{repo.auth}"  on.change="e => { repo.auth = e.target.value }"  type="text" /></div>
+    <button on.click="save()">Save</button><button on.click="repo = null">Cancel</button>
+    <button on.click="store.deleteRepo(repo); repo = null;">Delete</button>
+</div>
+<span if="saveError">Failed to save</span>
+<commits if="repo && repo.id" repo="{repo}"></commits>`
+    });
+
+    OK.register({
+        tag: 'commits',
+        context: props => {
+            return {
+                repo: props.repo,
+                isLoading: true,
+                commits: [],
+                async load() {
+                    this.commits = []
+
+                    let commits = await (await (fetch(`/repos/${this.repo.id}/commits`, {headers: {'Content-Type': 'application/json'}}))).json();
+                    this.commits = commits;
+                    this.isLoading = false;
+                },
+                async reload(){
+                    let commits = await (await (fetch(`/repos/${this.repo.id}/commits`, {headers: {'Content-Type': 'application/json'}}))).json();
+                    for(let commit of commits){
+                        if (!this.commits.find(c => c.sha === commit.sha)){
+                            this.commits.push(commit);
+                        }
+                    }
+                },
+                showCommit(commit) {
+                    let alreadyShowing = commit.showScreenshot;
+                    for(let c of this.commits){
+                        c.showScreenshot = false;
+                    }
+
+                    if (!alreadyShowing) {
+                        commit.showScreenshot = true;
+                    }
+                }
+            }
+        },
+        init(context) {
+            context.load();
+        },
+        template:
+            `<div> Commits:
+    <span if="isLoading">Loading...</span>
+    <span if="!isLoading">Total: {commits.length} <button on.click="reload">⭮</button></span>
+    <div if="!isLoading" class="fade" for="commit" of="commits">
+        <div>
+            <div on.click="showCommit(commit)" class="title { commit.showScreenshot ? 'active' : ''}" style="padding: 4px; margin: 4px; border: 1px solid black; border-radius: 4px;">
+                <span style="color: blue">{commit.email}</span> {commit.message}
+            </div>
+            <img if="commit.showScreenshot" class="loading_image" on.load="$el.classList.remove('loading_image'); $el.classList.add('loaded_image')" src='{"/commits/" + commit.sha + "/screenshot.png"}' />
+        </div>
+    </div>
+</div>`
+    })
+
+    OK.createComponent('app', {}, document.getElementById('app'));
+</script>
+</body>
+</html>
