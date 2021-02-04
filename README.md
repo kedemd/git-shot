@@ -1,6 +1,7 @@
 # git-shot
 Take screenshots of github commits
 
+
 This app allows a user to add repositories, then those repositories are monitored for commits.
 Every commit has a screenshot taken by a side worker. (implemented as an async set timeout loop :).
 
